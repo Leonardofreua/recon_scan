@@ -6,6 +6,7 @@ class RustscanAllPorts(PortScan):
     def __init__(self):
         super().__init__()
         self.label = "Rustscan All Ports"
+        self.mono_process = True
 
     async def run(self, target_scope: TargetScope):
         print(f"[>] Executing plugin {self.label} for {target_scope.target}...")

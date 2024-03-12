@@ -7,6 +7,7 @@ from scan.target_scope import TargetScope
 class Plugin(Protocol):
     title: str
     enabled: bool = True
+    mono_process: bool = False
 
     async def run(self, service):
         raise NotImplementedError

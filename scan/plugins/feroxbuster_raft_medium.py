@@ -1,19 +1,19 @@
 from urllib.parse import quote
 
-from scan.plugin import Executor, VulnerabilityScan
+from scan.plugin import DirEnumeration, Executor
 from scan.target_scope import TargetScope
 
 
-class NucleiSSL(VulnerabilityScan):
+class FeroxbusterRaftMedium(DirEnumeration):
     def __init__(self):
         super().__init__()
-        self.label = "Nuclei SSL"
+        self.label = "Feroxbuster Raft Medium"
 
     async def run(self, target_scope: TargetScope):
-        print(f"[>] Executing plugin {self.label} for {target_scope.target}...")
+        print(f"[>] Executing plugin {self.label}...")
 
         cmd = (
-            "nuclei -u {target} -o {output_path}/plugin_logs/vulnerability_scan/"
+            "feroxbuster -u {target} --quiet -o {output_path}/plugin_logs/dir_enumeration/"
             + quote(target_scope.target, safe="")
             + "_report.txt"
         )

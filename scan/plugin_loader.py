@@ -2,13 +2,8 @@ import importlib.util
 import inspect
 from pathlib import Path
 
-from scan.plugin import (
-    DirEnumeration,
-    Plugin,
-    PortScan,
-    SubdomainEnumeration,
-    VulnerabilityScan,
-)
+from scan.plugin import (DirEnumeration, Plugin, PortScan,
+                         SubdomainEnumeration, VulnerabilityScan)
 
 PLUGIN_TYPE_ERROR_MESSAGE = "The plugin {label} from {filename} needs to be a subclass of PortScan, SubdomainEnumeration, DirEnumeration or VulnerabilityScan."
 
@@ -16,10 +11,10 @@ PLUGIN_TYPE_ERROR_MESSAGE = "The plugin {label} from {filename} needs to be a su
 class PluginLoader:
     def __init__(self) -> None:
         self.plugins = {
-            "PortScan": set(),
-            "SubdomainEnumeration": set(),
-            "DirEnumeration": set(),
-            "VulnerabilityScan": set(),
+            "port_scan": set(),
+            "subdomain_enumeration": set(),
+            "dir_enumeration": set(),
+            "vulnerability_scan": set(),
         }
 
     def load(self) -> dict[set[Plugin]]:
@@ -64,13 +59,13 @@ class PluginLoader:
 
             match plugin:
                 case PortScan():
-                    self.plugins["PortScan"].add(plugin)
+                    self.plugins["port_scan"].add(plugin)
                 case SubdomainEnumeration():
-                    self.plugins["SubdomainEnumeration"].add(plugin)
+                    self.plugins["subdomain_enumeration"].add(plugin)
                 case DirEnumeration():
-                    self.plugins["DirEnumeration"].add(plugin)
+                    self.plugins["dir_enumeration"].add(plugin)
                 case VulnerabilityScan():
-                    self.plugins["VulnerabilityScan"].add(plugin)
+                    self.plugins["vulnerability_scan"].add(plugin)
                 case _:
                     raise TypeError(
                         PLUGIN_TYPE_ERROR_MESSAGE.format(

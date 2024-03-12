@@ -6,8 +6,7 @@ from functools import reduce
 from operator import iconcat
 from pathlib import Path
 
-from scan.plugin import (Plugin, PortScan, SubdomainEnumeration,
-                         VulnerabilityScan)
+from scan.plugin import Plugin, PortScan, SubdomainEnumeration
 from scan.plugin_loader import PluginLoader
 from scan.target_scope import TargetScope
 
@@ -19,8 +18,6 @@ DNSX_CMD = {
 # Reports Directories
 REPORTS_BASE_PATH = Path.cwd() / "reports"
 PLUGIN_LOGS_DIR_NAME = "plugin_logs"
-PORT_SCAN_DIR_NAME = "port_scan"
-VULNERABILITY_SCAN_DIR_NAME = "vulnerability_scan"
 
 MIN_SCAN = 1
 MAX_SCAN = 5
@@ -42,37 +39,41 @@ async def subdomain_enumeration(
 
 
 async def port_scan(
-    ip_adresses: set[str], target_dir_path: Path, plugins: set[PortScan]
+    target_domains: set[str], target_dir_path: Path, plugins: set[PortScan]
 ):
     print("\n[>] Scanning ports:\n")
 
-    plugins = sorted(plugins, key=lambda plugin: plugin.mono_process)
-    for plugin in plugins:
-        semaphore = asyncio.Semaphore(MIN_SCAN if plugin.mono_process else MAX_SCAN)
-        tasks = [
-            asyncio.create_task(
-                manage_plugin_execution_by_semaphore(
-                    TargetScope(ip, target_dir_path), plugin, semaphore
+    ip_adresses = await extract_ip_adresses_from_subdomains(target_domains)
+    if ip_adresses:
+        plugins = sorted(plugins, key=lambda plugin: plugin.mono_process)
+        for plugin in plugins:
+            semaphore = asyncio.Semaphore(MIN_SCAN if plugin.mono_process else MAX_SCAN)
+            tasks = [
+                asyncio.create_task(
+                    manage_plugin_execution_by_semaphore(
+                        TargetScope(ip, target_dir_path), plugin, semaphore
+                    )
                 )
-            )
-            for ip in ip_adresses
-        ]
-        await asyncio.gather(*tasks)
+                for ip in ip_adresses
+            ]
+            await asyncio.gather(*tasks)
 
 
-async def vulnerability_scan(
-    subdomains: set[str], target_dir_path: Path, plugins: set[VulnerabilityScan]
+async def general_plugins(
+    target_domains: set[str],
+    target_dir_path: Path,
+    plugins: set[Plugin],
 ):
-    print("\n[>] Executing Vulnerability Scan plugins\n")
+    print("\n[>] Executing Scan for general plugins\n")
     semaphore = asyncio.Semaphore(MAX_SCAN)
     tasks = [
         asyncio.create_task(
             manage_plugin_execution_by_semaphore(
-                TargetScope(subdomain, target_dir_path), plugin, semaphore
+                TargetScope(target_domain, target_dir_path), plugin, semaphore
             )
         )
         for plugin in plugins
-        for subdomain in subdomains
+        for target_domain in target_domains
     ]
     await asyncio.gather(*tasks)
 
@@ -102,7 +103,6 @@ async def extract_ip_adresses_from_subdomains(subdomains: set[str]) -> set[str] 
                 print(f"[x] Error: {stderr.decode()}")
 
             if stdout:
-                print(f"[>] Output: \n{stdout.decode()}")
                 return stdout.decode()
 
             return None
@@ -146,6 +146,14 @@ def create_plugin_logs_directory(target_dir_path: Path) -> Path:
     return plugin_logs_path
 
 
+def create_plugins_directory_by_category(
+    target_dir_path: Path, plugins_categories: set[str]
+):
+    plugin_logs_dir_path = create_plugin_logs_directory(target_dir_path)
+    for category in plugins_categories:
+        plugin_logs_dir_path.joinpath(category).mkdir(exist_ok=True)
+
+
 def normalize_url(url: str):
     return (
         re.sub(r"^https?:\/\/(www\.)?", "", url, flags=re.IGNORECASE).strip().strip("/")
@@ -153,7 +161,6 @@ def normalize_url(url: str):
 
 
 """TODO
-    - adicionar o feroxbuster
     - refatorar o uso do dnsx
     
 """
@@ -162,48 +169,52 @@ def normalize_url(url: str):
 async def run() -> None:
     parser = argparse.ArgumentParser(prog="ReconScan")
     parser.add_argument("target")
-    args = parser.parse_args(["http://www.php.testsparker.com/"])  # FIXME remover
+    args = parser.parse_args(["https://juice-shop.herokuapp.com/"])  # FIXME remover
     target = args.target
 
     if target:
-        plugins = PluginLoader().load()
+        categorized_plugins = PluginLoader().load()
 
         print(f"[>] Scanning {target}")
 
         target = normalize_url(target)
         target_dir_path = create_target_reports_directory(target)
-        plugin_logs_dir_path = create_plugin_logs_directory(target_dir_path)
+
+        create_plugins_directory_by_category(
+            target_dir_path,
+            {category for category, plugins in categorized_plugins.items() if plugins},
+        )
+
         target_domains = {target}
-        if plugins["SubdomainEnumeration"]:
+        if categorized_plugins["subdomain_enumeration"]:
             subdomains = await subdomain_enumeration(
-                TargetScope(target, target_dir_path), plugins["SubdomainEnumeration"]
+                TargetScope(target, target_dir_path),
+                categorized_plugins["subdomain_enumeration"],
             )
             target_domains.update(subdomains)
 
         if target_domains:
-            if plugins["VulnerabilityScan"]:
-                plugin_logs_dir_path.joinpath(VULNERABILITY_SCAN_DIR_NAME).mkdir(
-                    exist_ok=True
-                )
-                asyncio.create_task(
-                    vulnerability_scan(
-                        target_domains, target_dir_path, plugins["VulnerabilityScan"]
+            for category, plugins in categorized_plugins.items():
+                if category == "subdomain_enumeration":
+                    continue
+
+                if category in ["vulnerability_scan", "dir_enumeration"]:
+                    asyncio.create_task(
+                        general_plugins(target_domains, target_dir_path, plugins)
                     )
-                )
-
-            if plugins["PortScan"]:
-                plugin_logs_dir_path.joinpath(PORT_SCAN_DIR_NAME).mkdir(exist_ok=True)
-                ip_adresses = await extract_ip_adresses_from_subdomains(target_domains)
-
-                if ip_adresses:
-                    await port_scan(ip_adresses, target_dir_path, plugins["PortScan"])
+                elif category == "port_scan":
+                    await port_scan(target_domains, target_dir_path, plugins)
 
         print("Scanning completed.")
 
 
 def main() -> None:
     try:
-        asyncio.run(run())
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(run())
+
+        pending = asyncio.all_tasks(loop)
+        loop.run_until_complete(asyncio.gather(*pending))
     except asyncio.exceptions.CancelledError:
         pass
     except RuntimeError:

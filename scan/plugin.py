@@ -5,7 +5,7 @@ from scan.target_scope import TargetScope
 
 
 class Plugin(Protocol):
-    title: str
+    label: str
     enabled: bool = True
     mono_process: bool = False
 

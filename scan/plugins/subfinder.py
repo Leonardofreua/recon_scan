@@ -11,6 +11,6 @@ class Subfinder(SubdomainEnumeration):
         print(f"[>] Executing plugin {self.label}...")
 
         cmd = "subfinder -silent -d {target} -o {output_path}/plugin_logs/subdomain_enumeration/subfinder_report.txt"
-        process, stdout, stderr = await Executor(target_scope).execute(cmd)
+        _, stdout, _ = await Executor(target_scope).execute(cmd)
 
-        return stdout.decode()
+        return stdout.decode() if stdout else None

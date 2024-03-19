@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import csv
 import re
 from datetime import datetime
 from functools import reduce
@@ -24,14 +25,26 @@ async def subdomain_enumeration(
 ) -> set[str]:
     print("\n[>] Scanning subdomains:\n")
     tasks = [plugin.run(target_scope) for plugin in plugins]
-    return {
+    subdomains = {
         subs
         for subs in reduce(
             iconcat,
-            [subdomains.splitlines() for subdomains in await asyncio.gather(*tasks)],
+            [
+                subdomains.splitlines()
+                for subdomains in await asyncio.gather(*tasks)
+                if subdomains
+            ],
             [],
         )
     }
+
+    write_report(
+        target_scope.report_dir_path.joinpath("subdomains.csv"),
+        subdomains,
+        ["subdomains"],
+    )
+
+    return subdomains
 
 
 async def port_scan(
@@ -141,6 +154,19 @@ def normalize_url(url: str):
     return (
         re.sub(r"^https?:\/\/(www\.)?", "", url, flags=re.IGNORECASE).strip().strip("/")
     )
+
+
+def write_report(
+    file_path: Path, content: list[str] | set[str], headers: list[str]
+) -> None:
+    if content and file_path:
+        with open(file_path, "w", newline="") as report:
+            writer = csv.writer(report, delimiter=";")
+            if headers:
+                writer.writerow(headers)
+
+            for row in content:
+                writer.writerow([row.strip()])
 
 
 async def run() -> None:

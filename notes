@@ -1,0 +1,30 @@
+arquivos:
+    [Os arquivos pode ficar na pasta raiz de cada alvo -> reports/<alvo.com>]
+    - Criar um arquivo com todos domínios sem repetição (CSV)
+        * Criar filtro dos domínios através de wordlists/dicionario de palavras.
+            (
+                Sugestão: adicionar um argumento novo no CLI do próprio script para passar a wordlist 
+                ou desenvolver a lógica para realizar o processo de forma automático, porém estática.
+            )
+            Exemplo wordlist (* Lembrando que temos o repositório SecLists que inclusive o Feroxbuster utiliza):
+                dev
+                api
+                hml
+                test
+                auth
+                admin
+    - Criar arquivo com todos os IPs e Portas (TXT)
+        * Verificar o que mais podemos extrair dos resultados do nmap (que inclusive está sendo rodado através do rustscan)
+
+    - Encontrar formas de filtrar melhor a execução do Feroxbuster
+        Sugestões:
+        * Remover portas não uteis para uma varredura especifica
+        * Encontrar wordlists no repositório do SecLists que possam ser uteis
+
+    - Analisar o que podemos extrair e como podemos utilizar a saída do nuclei (vulnerability scan)
+
+    
+
+
+ideias pro futuro:
+    - usar scikit-learn pra ajudar na analise das informações extraídas

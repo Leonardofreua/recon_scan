@@ -8,12 +8,8 @@ from pathlib import Path
 
 from scan.plugin import Plugin, PortScan, SubdomainEnumeration
 from scan.plugin_loader import PluginLoader
+from scan.plugins.util.dnsx import Dnsx
 from scan.target_scope import TargetScope
-
-DNSX_CMD = {
-    "label": "dnsx",
-    "cmd": "echo {domain} | dnsx -silent -a -re",
-}
 
 # Reports Directories
 REPORTS_BASE_PATH = Path.cwd() / "reports"
@@ -43,7 +39,7 @@ async def port_scan(
 ):
     print("\n[>] Scanning ports:\n")
 
-    ip_adresses = await extract_ip_adresses_from_subdomains(target_domains)
+    ip_adresses = await extract_ip_adresses_from_target(target_domains)
     if ip_adresses:
         plugins = sorted(plugins, key=lambda plugin: plugin.mono_process)
         for plugin in plugins:
@@ -78,36 +74,18 @@ async def general_plugins(
     await asyncio.gather(*tasks)
 
 
-async def manage_plugin_execution_by_semaphore(
-    target_scope: TargetScope, plugin: Plugin, semaphore
-):
-    async with semaphore:
-        await plugin.run(target_scope)
-
-
-async def extract_ip_adresses_from_subdomains(subdomains: set[str]) -> set[str] | None:
+async def extract_ip_adresses_from_target(target_domains: set[str]) -> set[str] | None:
     print("[>] Extracting ip address from subdomains.")
-
-    async def run_dnsx_by_subdomain(subdomain: str):
-        print(f"\n[>] Running dnsx for {subdomain}\n")
-        try:
-            process = await asyncio.create_subprocess_shell(
-                cmd=DNSX_CMD["cmd"].format(domain=subdomain),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+    semaphore = asyncio.Semaphore(MAX_SCAN)
+    dnsx = Dnsx()
+    tasks = [
+        asyncio.create_task(
+            manage_plugin_execution_by_semaphore(
+                TargetScope(target_domain), dnsx, semaphore
             )
-
-            stdout, stderr = await process.communicate()
-
-            if stderr:
-                print(f"[x] Error: {stderr.decode()}")
-
-            if stdout:
-                return stdout.decode()
-
-            return None
-        except Exception as e:
-            print(f"[x] Plugin {DNSX_CMD['label']} execution failed: {e}")
+        )
+        for target_domain in target_domains
+    ]
 
     ips = {
         ip
@@ -115,9 +93,7 @@ async def extract_ip_adresses_from_subdomains(subdomains: set[str]) -> set[str] 
             iconcat,
             [
                 hosts.splitlines()
-                for hosts in await asyncio.gather(
-                    *[run_dnsx_by_subdomain(subdomain) for subdomain in subdomains]
-                )
+                for hosts in await asyncio.gather(*tasks)
                 if hosts is not None
             ],
             [],
@@ -130,6 +106,13 @@ async def extract_ip_adresses_from_subdomains(subdomains: set[str]) -> set[str] 
 
     print("[~] No ip address was found.")
     return None
+
+
+async def manage_plugin_execution_by_semaphore(
+    target_scope: TargetScope, plugin: Plugin, semaphore
+):
+    async with semaphore:
+        return await plugin.run(target_scope)
 
 
 def create_target_reports_directory(target: str) -> Path:
@@ -160,16 +143,10 @@ def normalize_url(url: str):
     )
 
 
-"""TODO
-    - refatorar o uso do dnsx
-    
-"""
-
-
 async def run() -> None:
     parser = argparse.ArgumentParser(prog="ReconScan")
     parser.add_argument("target")
-    args = parser.parse_args(["https://juice-shop.herokuapp.com/"])  # FIXME remover
+    args = parser.parse_args()
     target = args.target
 
     if target:

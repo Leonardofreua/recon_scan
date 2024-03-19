@@ -30,6 +30,9 @@ class DirEnumeration(Plugin):
 class VulnerabilityScan(Plugin):
     pass
 
+class Util(Plugin):
+    pass
+
 
 class Executor:
     def __init__(self, target_scope: TargetScope) -> None:
@@ -37,11 +40,17 @@ class Executor:
 
     async def execute(self, cmd: str):
         if cmd and not cmd.isspace():
-            process = await asyncio.create_subprocess_shell(
+            command = (
                 cmd.format(
                     target=self.target_scope.target,
                     output_path=self.target_scope.report_dir_path,
-                ),
+                )
+                if self.target_scope.report_dir_path
+                else cmd.format(target=self.target_scope.target)
+            )
+
+            process = await asyncio.create_subprocess_shell(
+                command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
